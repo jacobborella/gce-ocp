@@ -1,0 +1,45 @@
+---
+- name: Subscribe the machine
+  redhat_subscription:
+    state: present
+    username: "{{ rh_username }}"
+    password: "{{ rh_password }}"
+    pool_ids: "{{ rh_poolid }}"
+- name: Install yum-utils
+  yum:
+    name: yum-utils
+- name: Disable all repos
+  shell: yum-config-manager --disable \*
+- name: Enable needed repos
+  shell: subscription-manager repos --enable="rhel-7-server-rpms" --enable="rhel-7-server-extras-rpms" --enable="rhel-7-server-ose-3.10-rpms" --enable="rhel-7-server-ansible-2.4-rpms"
+- name: Install required packages
+  yum:
+    name: wget,git,net-tools,bind-utils,iptables-services,bridge-utils,bash-completion,kexec-tools,sos,psacct
+    state: latest
+- name: upgrade all packages
+  yum:
+    name: '*'
+    state: latest
+- name: Install openshift-ansible
+  yum:
+    name: openshift-ansible
+    state: latest
+- name: Install docker
+  yum:
+    name: docker-1.13.1
+- name: Setup docker storage
+  block:
+    - copy:
+        dest: "/etc/sysconfig/docker-storage-setup"
+        content: |
+          DEVS=/dev/sdb
+          VG=docker-vg
+    - command: docker-storage-setup
+- name: enable docker and ensure it is not masked
+  systemd:
+    name: docker
+    enabled: yes
+    masked: no
+- name: Make sure docker is running
+  systemd: state=started name=docker
+

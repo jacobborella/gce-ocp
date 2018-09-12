@@ -1,0 +1,202 @@
+---
+- name: Compute Engine Instance Examples
+  hosts: localhost
+  tasks:
+    - name: create the ocp network
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        service_account_email: "{{ service_account_email }}"
+        name: "{{ cluster_network_name }}"
+        mode: custom
+        subnet_name: "{{ cluster_subnetwork_name }}"
+        subnet_region: "{{ region }}"
+        ipv4_range: "{{ cluster_network_cidr }}"
+        state: "present"
+    - name: Allow ssh traffic to bastion
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: ext-to-bastion-ssh-22
+        allowed: tcp:22
+        target_tags: "{{ bastion_tag }}" 
+        state: present
+    - name: Allow ssh traffic from bastion to hosts
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: bastion-to-master-ssh-22
+        allowed: tcp:22
+        target_tags: "{{ node_tag }}"
+        src_tags: "{{ bastion_tag }}"
+        state: present
+    - name: Create IP for master LB
+      gce_eip:
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        service_account_email: "{{ service_account_email }}"
+        name: "{{ project_id }}-master-lb-ip"
+        region: "{{ region }}"
+        state: present
+    - name: Create master LB
+      gce_lb:
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        service_account_email: "{{ service_account_email }}"
+        name: "{{ project_id }}-master-lb"
+        region: "{{ region }}"
+        members: ["{{ zone }}/master-1"]
+        external_ip: "{{ project_id }}-master-lb-ip"
+#        port_range: 8443
+#        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
+#        httphealthcheck_port: 8443
+#        httphealthcheck_path: "/healthz"
+#        httphealthcheck_interval: 10
+#        httphealthcheck_timeout: 10
+#        httphealthcheck_healthy_count: 3
+#        httphealthcheck_unhealthy_count: 3
+        state: present
+    - name: Create bastion host
+      gce:
+        instance_names: bastion-host
+        zone: "{{ zone }}"
+        machine_type: n1-standard-1
+        image: my-rhel-image
+        state: present
+        tags:
+          - "{{ bastion_tag }}"
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        network: "{{ cluster_network_name }}"
+        subnetwork: "{{ cluster_subnetwork_name }}"
+      register: gce_bastion
+
+    - name: create a boot disk
+      gcp_compute_disk:
+        name: master-1-boot-disk
+        size_gb: 10
+#        disk_encryption_key:
+#          raw_key: 'SGVsbG8gZnJvbSBHb29nbGUgQ2xvdWQgUGxhdGZvcm0='
+        zone: "{{ zone }}"
+#        service_account_email: "{{ service_account_email }}"
+        project: "{{ project_id }}"
+        source_image: https://www.googleapis.com/compute/v1/projects/gce-ocp-test/global/images/my-rhel-image
+        auth_kind: serviceaccount
+        service_account_file: "{{ credentials_file }}"
+        scopes:
+          - https://www.googleapis.com/auth/compute
+        state: present
+
+    - name: create a docker disk
+      gcp_compute_disk:
+        name: master-1-docker-disk
+        size_gb: 50
+#        disk_encryption_key:
+#          raw_key: 'SGVsbG8gZnJvbSBHb29nbGUgQ2xvdWQgUGxhdGZvcm0='
+        zone: "{{ zone }}"
+#        service_account_email: "{{ service_account_email }}"
+        project: "{{ project_id }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ credentials_file }}"
+        scopes:
+          - https://www.googleapis.com/auth/compute
+        state: present
+
+    - name: create master instances
+      gce:
+        instance_names: master-1
+        zone: "{{ zone }}"
+        machine_type: n1-standard-8
+        image: my-rhel-image
+        state: present
+        tags:
+          - "{{ master_tag }}"
+          - "{{ node_tag }}"
+        disks:
+          - name: master-1-boot-disk
+            mode: READ_WRITE
+          - name: master-1-docker-disk
+            mode: READ_WRITE
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        network: "{{ cluster_network_name }}"
+        subnetwork: "{{ cluster_subnetwork_name }}"
+      register: gce_master
+    - name: Save host data (master)
+      add_host:
+        hostname: "{{ item.public_ip }}"
+        groupname: master_ips
+      with_items: "{{ gce_master.instance_data }}"
+
+    - name: Save host data (bastion)
+      add_host:
+        hostname: "{{ item.public_ip }}"
+        groupname: bastion_ips
+      with_items: "{{ gce_bastion.instance_data }}"
+
+# This is a mess clean up, look at reference guide ssh -A (couldn't get it to work, try again
+- hosts: localhost 
+  tasks:
+    - gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: ext-to-node-ssh-22
+        allowed: tcp:22
+        target_tags: "{{ node_tag }}"
+        state: present
+- hosts: master_ips
+  become: no
+  tasks:
+    - name: Wait for SSH for instances
+      wait_for_connection:
+    - authorized_key:
+        user: jacobborella
+        state: present
+        key: "{{ lookup('file', '/Users/jacobborella/workspace/gce-ocp-demo/ansible/id_rsa.pub') }}"
+- hosts: master_ips
+  become: true
+  roles:
+    - node-prereq
+- hosts: localhost
+  tasks:
+    - gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: ext-to-node-ssh-22
+        allowed: tcp:22
+        target_tags: "{{ node_tag }}"
+        state: absent
+- hosts: bastion_ips
+  become: no
+  tasks:
+    - name: Copy id_rsa file to bastion for access
+      copy:
+        src: id_rsa
+        dest: ~/.ssh/id_rsa
+        owner: jacobborella
+        group: jacobborella
+        mode: 0600
+    - name: Add host name key to known hosts
+      shell: ssh-keyscan -H master-1 >> .ssh/known_hosts
+        creates=.ssh/known_hosts
+        chdir=/home/jacobborella
+# End of mess
+
+- hosts: bastion_ips
+  become: yes
+  become_method: sudo
+  roles:
+    - bastion-prereq
+
+#- name: Configure Hosts
+#  hosts: master_ips
+#  become: yes
+#  become_method: sudo
+#  roles:
+#    - node-prereq
+#  tags:
+#    - config
