@@ -3,9 +3,9 @@
 Install Ansible 3.6
 
 Set the following variables in your env
-RH_USER=<rh username>
-RH_PASSWORD=<rh password>
-export RH_POOL_ID=<id for sub you want to use>
+RH_USER=*rh username*
+RH_PASSWORD=*rh password*
+RH_POOL_ID=*id for sub you want to use*
 
 run
 ```
