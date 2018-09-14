@@ -25,6 +25,24 @@
         subnet_region: "{{ region }}"
         ipv4_range: "{{ cluster_network_cidr }}"
         state: "present"
+    - name: Allow http(s) traffic to the infra nodes
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: ext-to-infra
+        allowed: tcp:80,443
+        target_tags: "{{ infra_tag }}"
+        state: present
+    - name: Allow https traffic to the master nodes
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: ext-to-master
+        allowed: tcp:443
+        target_tags: "{{ master_tag }}"
+        state: present
     - name: Allow ssh traffic to bastion
       gce_net:
         project_id: "{{ project_id }}"
