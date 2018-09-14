@@ -293,7 +293,7 @@
         project_id: "{{ project_id }}"
         service_account_email: "{{ service_account_email }}"
         name: "{{ project_id }}-master-lb-ip"
-        region: global
+        region: "{{ region }}"
         state: present
     - name: Create master LB
       gce_lb:
