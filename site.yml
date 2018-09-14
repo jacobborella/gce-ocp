@@ -1,7 +1,19 @@
 ---
 - name: Compute Engine Instance Examples
   hosts: localhost
+  vars:
+    masters:
+      - master-1
+      - master-2
+      - master-3
+    infra_nodes:
+      - infra-1
+      - infra-2
+    app_nodes:
+      - node-1
+      - node-2
   tasks:
+    #section for setting up network
     - name: create the ocp network
       gce_net:
         project_id: "{{ project_id }}"
@@ -27,37 +39,92 @@
         project_id: "{{ project_id }}"
         credentials_file: "{{ credentials_file }}"
         name: "{{ cluster_network_name }}"
-        fwname: bastion-to-master-ssh-22
+        fwname: bastion-to-nodes-ssh-22
         allowed: tcp:22
         target_tags: "{{ node_tag }}"
         src_tags: "{{ bastion_tag }}"
         state: present
-    - name: Create IP for master LB
-      gce_eip:
-        credentials_file: "{{ credentials_file }}"
+    - name: Allow udp/tcp traffic on port 8053 from nodes to master
+      gce_net:
         project_id: "{{ project_id }}"
-        service_account_email: "{{ service_account_email }}"
-        name: "{{ project_id }}-master-lb-ip"
-        region: "{{ region }}"
-        state: present
-    - name: Create master LB
-      gce_lb:
         credentials_file: "{{ credentials_file }}"
-        project_id: "{{ project_id }}"
-        service_account_email: "{{ service_account_email }}"
-        name: "{{ project_id }}-master-lb"
-        region: "{{ region }}"
-        members: ["{{ zone }}/master-1"]
-        external_ip: "{{ project_id }}-master-lb-ip"
-#        port_range: 8443
-#        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
-#        httphealthcheck_port: 8443
-#        httphealthcheck_path: "/healthz"
-#        httphealthcheck_interval: 10
-#        httphealthcheck_timeout: 10
-#        httphealthcheck_healthy_count: 3
-#        httphealthcheck_unhealthy_count: 3
+        name: "{{ cluster_network_name }}"
+        fwname: node-to-master-traffic
+        allowed: udp:8053;tcp:8053
+        target_tags: "{{ master_tag }}"
+        src_tags: "{{ node_tag }}"
         state: present
+    - name: Allow tcp traffic on port 10250 from master to nodes
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: master-to-node-traffic
+        allowed: tcp:10250
+        target_tags: "{{ node_tag }}"
+        src_tags: "{{ master_tag }}"
+        state: present
+    - name: Allow tcp traffic on ports 2379 and 2380 from master to master
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: master-to-master-traffic
+        allowed: tcp:2379,2380
+        target_tags: "{{ master_tag }}"
+        src_tags: "{{ master_tag }}"
+        state: present
+    - name: Allow tcp traffic on port 443 from any to master
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: any-to-master-traffic
+        allowed: tcp:443
+        target_tags: "{{ master_tag }}"
+        src_range: "{{ cluster_network_cidr }}"
+        state: present
+    - name: Allow tcp traffic on ports 9200 and 9300 from infra to infra
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: infra-to-infra-traffic
+        allowed: tcp:9200,9300
+        target_tags: "{{ infra_tag }}"
+        src_tags: "{{ infra_tag }}"
+        state: present
+    - name: Allow tcp traffic on port 443 and 80 from any to infra
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: any-to-infra-traffic
+        allowed: tcp:80,443
+        target_tags: "{{ infra_tag }}"
+        src_range: 0.0.0.0/0
+        state: present
+    - name: Allow udp traffic on port 4789 from node to node
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: node-to-node-traffic
+        allowed: udp:4789
+        target_tags: "{{ node_tag }}"
+        src_tags: "{{ node_tag }}"
+        state: present
+    - name: Allow tcp traffic on port 10250 from infra to node
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: infra-to-node-traffic
+        allowed: udp:10250
+        target_tags: "{{ node_tag }}"
+        src_tags: "{{ infra_tag }}"
+        state: present
+
     - name: Create bastion host
       gce:
         instance_names: bastion-host
@@ -73,14 +140,11 @@
         subnetwork: "{{ cluster_subnetwork_name }}"
       register: gce_bastion
 
-    - name: create a boot disk
+    - name: create boot disks
       gcp_compute_disk:
-        name: master-1-boot-disk
+        name: "{{ item }}-boot-disk"
         size_gb: 10
-#        disk_encryption_key:
-#          raw_key: 'SGVsbG8gZnJvbSBHb29nbGUgQ2xvdWQgUGxhdGZvcm0='
         zone: "{{ zone }}"
-#        service_account_email: "{{ service_account_email }}"
         project: "{{ project_id }}"
         source_image: https://www.googleapis.com/compute/v1/projects/gce-ocp-test/global/images/my-rhel-image
         auth_kind: serviceaccount
@@ -88,25 +152,30 @@
         scopes:
           - https://www.googleapis.com/auth/compute
         state: present
+      with_items:
+        - "{{ masters }}"
+        - "{{ infra_nodes }}"
+        - "{{ app_nodes }}"
 
-    - name: create a docker disk
+    - name: create docker disks
       gcp_compute_disk:
-        name: master-1-docker-disk
+        name: "{{ item }}-docker-disk"
         size_gb: 50
-#        disk_encryption_key:
-#          raw_key: 'SGVsbG8gZnJvbSBHb29nbGUgQ2xvdWQgUGxhdGZvcm0='
         zone: "{{ zone }}"
-#        service_account_email: "{{ service_account_email }}"
         project: "{{ project_id }}"
         auth_kind: serviceaccount
         service_account_file: "{{ credentials_file }}"
         scopes:
           - https://www.googleapis.com/auth/compute
         state: present
+      with_items:
+        - "{{ masters }}"
+        - "{{ infra_nodes }}"
+        - "{{ app_nodes }}"
 
     - name: create master instances
       gce:
-        instance_names: master-1
+        instance_names: "{{item}}"
         zone: "{{ zone }}"
         machine_type: n1-standard-8
         image: my-rhel-image
@@ -115,26 +184,138 @@
           - "{{ master_tag }}"
           - "{{ node_tag }}"
         disks:
-          - name: master-1-boot-disk
+          - name: "{{ item }}-boot-disk"
             mode: READ_WRITE
-          - name: master-1-docker-disk
+          - name: "{{ item }}-docker-disk"
             mode: READ_WRITE
         credentials_file: "{{ credentials_file }}"
         project_id: "{{ project_id }}"
         network: "{{ cluster_network_name }}"
         subnetwork: "{{ cluster_subnetwork_name }}"
+      with_items: "{{ masters }}"
       register: gce_master
+
+    - name: create infra instances
+      gce:
+        instance_names: "{{item}}"
+        zone: "{{ zone }}"
+        machine_type: n1-standard-8
+        image: my-rhel-image
+        state: present
+        tags:
+          - "{{ infra_tag }}"
+          - "{{ node_tag }}"
+        disks:
+          - name: "{{ item }}-boot-disk"
+            mode: READ_WRITE
+          - name: "{{ item }}-docker-disk"
+            mode: READ_WRITE
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        network: "{{ cluster_network_name }}"
+        subnetwork: "{{ cluster_subnetwork_name }}"
+      with_items: "{{ infra_nodes }}"
+      register: gce_infra
+
+    - name: create app node instances
+      gce:
+        instance_names: "{{item}}"
+        zone: "{{ zone }}"
+        machine_type: n1-standard-8
+        image: my-rhel-image
+        state: present
+        tags:
+          - "{{ node_tag }}"
+        disks:
+          - name: "{{ item }}-boot-disk"
+            mode: READ_WRITE
+          - name: "{{ item }}-docker-disk"
+            mode: READ_WRITE
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        network: "{{ cluster_network_name }}"
+        subnetwork: "{{ cluster_subnetwork_name }}"
+      with_items: "{{ app_nodes }}"
+      register: gce_app_node
+    - name: Create IP for app LB
+      gce_eip:
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        service_account_email: "{{ service_account_email }}"
+        name: "{{ project_id }}-app-lb-ip"
+        region: "{{ region }}"
+        state: present
+    - name: Create app LB
+      gce_lb:
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        service_account_email: "{{ service_account_email }}"
+        name: "{{ project_id }}-app-lb"
+        region: "{{ region }}"
+        members: ["{{ (' ' + zone + '/') + (',' + zone + '/').join(infra_nodes) }}"]
+        external_ip: "{{ project_id }}-app-lb-ip"
+#        port_range: 8443
+#        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
+#        httphealthcheck_port: 8443
+#        httphealthcheck_path: "/healthz"
+#        httphealthcheck_interval: 10
+#        httphealthcheck_timeout: 10
+#        httphealthcheck_healthy_count: 3
+#        httphealthcheck_unhealthy_count: 3
+        state: present
+
+    - name: Create IP for master LB
+      gce_eip:
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        service_account_email: "{{ service_account_email }}"
+        name: "{{ project_id }}-master-lb-ip"
+        region: global
+        state: present
+    - name: Create master LB
+      gce_lb:
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        service_account_email: "{{ service_account_email }}"
+        name: "{{ project_id }}-master-lb"
+        region: "{{ region }}"
+        members: ["{{ (' ' + zone + '/') + (',' + zone + '/').join(masters) }}"]
+        external_ip: "{{ project_id }}-master-lb-ip"
+#        port_range: 8443
+#        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
+#        httphealthcheck_port: 8443
+#        httphealthcheck_path: "/healthz"
+#        httphealthcheck_interval: 10
+#        httphealthcheck_timeout: 10
+#        httphealthcheck_healthy_count: 3
+#        httphealthcheck_unhealthy_count: 3
+        state: present
+
     - name: Save host data (master)
       add_host:
-        hostname: "{{ item.public_ip }}"
+        hostname: "{{ item.instance_data[0].public_ip }}"
         groupname: master_ips
-      with_items: "{{ gce_master.instance_data }}"
+      loop: "{{ gce_master.results }}"
+
+    - name: Save host data (infra)
+      add_host:
+        hostname: "{{ item.instance_data[0].public_ip }}"
+        groupname: infra_ips
+      loop: "{{ gce_infra.results }}"
+
+    - name: Save host data (app node)
+      add_host:
+        hostname: "{{ item.instance_data[0].public_ip }}"
+        groupname: app_node_ips
+      loop: "{{ gce_app_node.results }}"
 
     - name: Save host data (bastion)
       add_host:
         hostname: "{{ item.public_ip }}"
         groupname: bastion_ips
       with_items: "{{ gce_bastion.instance_data }}"
+
+#    - fail:
 
 # This is a mess clean up, look at reference guide ssh -A (couldn't get it to work, try again
 - hosts: localhost 
@@ -147,7 +328,7 @@
         allowed: tcp:22
         target_tags: "{{ node_tag }}"
         state: present
-- hosts: master_ips
+- hosts: master_ips:infra_ips:app_node_ips
   become: no
   tasks:
     - name: Wait for SSH for instances
@@ -156,7 +337,7 @@
         user: jacobborella
         state: present
         key: "{{ lookup('file', '/Users/jacobborella/workspace/gce-ocp-demo/ansible/id_rsa.pub') }}"
-- hosts: master_ips
+- hosts: master_ips:infra_ips:app_node_ips
   become: true
   roles:
     - node-prereq
@@ -181,7 +362,7 @@
         group: jacobborella
         mode: 0600
     - name: Add host name key to known hosts
-      shell: ssh-keyscan -H master-1 >> .ssh/known_hosts
+      shell: ssh-keyscan -H {{' '.join(masters) + ' ' + ' '.join(infra_nodes) + ' ' + ' '.join(app_nodes) }} >> .ssh/known_hosts
         creates=.ssh/known_hosts
         chdir=/home/jacobborella
 # End of mess
@@ -191,12 +372,3 @@
   become_method: sudo
   roles:
     - bastion-prereq
-
-#- name: Configure Hosts
-#  hosts: master_ips
-#  become: yes
-#  become_method: sudo
-#  roles:
-#    - node-prereq
-#  tags:
-#    - config
