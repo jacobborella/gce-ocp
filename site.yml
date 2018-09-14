@@ -1,17 +1,17 @@
 ---
 - name: Compute Engine Instance Examples
   hosts: localhost
-  vars:
-    masters:
-      - master-1
-      - master-2
-      - master-3
-    infra_nodes:
-      - infra-1
-      - infra-2
-    app_nodes:
-      - node-1
-      - node-2
+#  vars:
+#    masters:
+#      - master-1
+#      - master-2
+#      - master-3
+#    infra_nodes:
+#      - infra-1
+#      - infra-2
+#    app_nodes:
+#      - node-1
+#      - node-2
   tasks:
     #section for setting up network
     - name: create the ocp network
@@ -245,6 +245,9 @@
         name: "{{ project_id }}-app-lb-ip"
         region: "{{ region }}"
         state: present
+    - name: create list with infra nodes + zone
+      set_fact:
+        app_nodes_with_zone: "{{ infra_nodes | map('regex_replace', '^(.*)$','{{ zone }}/\\1') | list  }}"
     - name: Create app LB
       gce_lb:
         credentials_file: "{{ credentials_file }}"
@@ -252,9 +255,9 @@
         service_account_email: "{{ service_account_email }}"
         name: "{{ project_id }}-app-lb"
         region: "{{ region }}"
-        members: ["{{ (' ' + zone + '/') + (',' + zone + '/').join(infra_nodes) }}"]
+        members: "{{ app_nodes_with_zone }}"
         external_ip: "{{ project_id }}-app-lb-ip"
-#        port_range: 8443
+        port_range: 80-443
 #        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
 #        httphealthcheck_port: 8443
 #        httphealthcheck_path: "/healthz"
@@ -263,7 +266,9 @@
 #        httphealthcheck_healthy_count: 3
 #        httphealthcheck_unhealthy_count: 3
         state: present
-
+    - name: create list with master nodes + zone
+      set_fact:
+        master_nodes_with_zone: "{{ masters | map('regex_replace', '^(.*)$','{{ zone }}/\\1') | list  }}"
     - name: Create IP for master LB
       gce_eip:
         credentials_file: "{{ credentials_file }}"
@@ -279,9 +284,9 @@
         service_account_email: "{{ service_account_email }}"
         name: "{{ project_id }}-master-lb"
         region: "{{ region }}"
-        members: ["{{ (' ' + zone + '/') + (',' + zone + '/').join(masters) }}"]
+        members: "{{ master_nodes_with_zone }}"
         external_ip: "{{ project_id }}-master-lb-ip"
-#        port_range: 8443
+        port_range: 443
 #        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
 #        httphealthcheck_port: 8443
 #        httphealthcheck_path: "/healthz"
@@ -337,10 +342,10 @@
         user: jacobborella
         state: present
         key: "{{ lookup('file', '/Users/jacobborella/workspace/gce-ocp-demo/ansible/id_rsa.pub') }}"
-- hosts: master_ips:infra_ips:app_node_ips
-  become: true
-  roles:
-    - node-prereq
+#- hosts: master_ips:infra_ips:app_node_ips
+#  become: true
+#  roles:
+#    - node-prereq
 - hosts: localhost
   tasks:
     - gce_net:
@@ -367,8 +372,8 @@
         chdir=/home/jacobborella
 # End of mess
 
-- hosts: bastion_ips
-  become: yes
-  become_method: sudo
-  roles:
-    - bastion-prereq
+#- hosts: bastion_ips
+#  become: yes
+#  become_method: sudo
+#  roles:
+#    - bastion-prereq

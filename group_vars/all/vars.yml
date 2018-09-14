@@ -1,9 +1,19 @@
 ---
+masters:
+  - master-1
+  - master-2
+  - master-3
+infra_nodes:
+  - infra-1
+  - infra-2
+app_nodes:
+  - node-1
+  - node-2
 service_account_email: "admin-937@gce-ocp-test.iam.gserviceaccount.com"
 credentials_file: "/Users/jacobborella/workspace/gce-ocp-demo/shell/gce-ocp-test-e47ea5fac0d2.json"
 project_id: "gce-ocp-test"
 region: "europe-west3"
-zone: "europe-west3-c"
+zone: "europe-west3-b"
 bastion_tag: "gce-ocp-test-bastion"
 master_tag: "gce-ocp-test-master"
 infra_tag: "gce-ocp-test-master"
