@@ -1,17 +1,6 @@
 ---
 - name: Compute Engine Instance Examples
   hosts: localhost
-#  vars:
-#    masters:
-#      - master-1
-#      - master-2
-#      - master-3
-#    infra_nodes:
-#      - infra-1
-#      - infra-2
-#    app_nodes:
-#      - node-1
-#      - node-2
   tasks:
     #section for setting up network
     - name: create the ocp network
@@ -338,8 +327,6 @@
         groupname: bastion_ips
       with_items: "{{ gce_bastion.instance_data }}"
 
-#    - fail:
-
 # This is a mess clean up, look at reference guide ssh -A (couldn't get it to work, try again
 - hosts: localhost 
   tasks:
@@ -357,9 +344,9 @@
     - name: Wait for SSH for instances
       wait_for_connection:
     - authorized_key:
-        user: jacobborella
+        user: "{{ remote_linux_user }}"
         state: present
-        key: "{{ lookup('file', '/Users/jacobborella/workspace/gce-ocp-demo/ansible/id_rsa.pub') }}"
+        key: "{{ lookup('file', '{{ public_key_location }}') }}"
 #- hosts: master_ips:infra_ips:app_node_ips
 #  become: true
 #  roles:
@@ -379,19 +366,19 @@
   tasks:
     - name: Copy id_rsa file to bastion for access
       copy:
-        src: id_rsa
+        src: "{{ private_key_location }}"
         dest: ~/.ssh/id_rsa
-        owner: jacobborella
-        group: jacobborella
+        owner: "{{ remote_linux_user }}"
+        group: "{{ remote_linux_user }}"
         mode: 0600
     - name: Add host name key to known hosts
       shell: ssh-keyscan -H {{' '.join(masters) + ' ' + ' '.join(infra_nodes) + ' ' + ' '.join(app_nodes) }} >> .ssh/known_hosts
         creates=.ssh/known_hosts
-        chdir=/home/jacobborella
+        chdir="/home/{{remote_linux_user}}"
 # End of mess
 
-#- hosts: bastion_ips
-#  become: yes
-#  become_method: sudo
-#  roles:
-#    - bastion-prereq
+- hosts: bastion_ips
+  become: yes
+  become_method: sudo
+  roles:
+    - bastion-prereq

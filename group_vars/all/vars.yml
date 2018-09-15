@@ -24,3 +24,6 @@ cluster_network_cidr: "10.240.0.0/24"
 rh_username: "{{ lookup('env', 'RH_USER') }}"
 rh_password: "{{ lookup('env', 'RH_PASSWORD') }}"
 rh_poolid: "{{ lookup('env', 'RH_POOL_ID') }}"
+public_key_location: /Users/jacobborella/workspace/gce-ocp-demo/ansible/id_rsa.pub
+private_key_location: /Users/jacobborella/workspace/gce-ocp-demo/ansible/id_rsa
+remote_linux_user: jacobborella

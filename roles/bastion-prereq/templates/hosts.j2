@@ -8,7 +8,7 @@ nfs
 # Set variables common for all OSEv3 hosts
 [OSEv3:vars]
 # SSH user, this user should allow ssh based auth without requiring a password
-ansible_ssh_user=jacobborella
+ansible_ssh_user='{{remote_linux_user}}'
 ansible_sudo=true
 ansible_become=true
 openshift_disable_check=disk_availability,docker_storage,memory_availability
@@ -50,29 +50,34 @@ openshift_service_catalog_image_version=v3.10
 
 # host group for masters
 [masters]
-master-1
-master-2
-master-3
+{% for host in masters %}
+{{ host }}
+{% endfor %}
 
 # host group for nfs
 [nfs]
-master-1
-master-2
-master-3
+{% for host in masters %}
+{% if loop.first %}
+{{ host }}
+{% endif %}
+{% endfor %}
 
 # host group for etcd
 [etcd]
-master-1
-master-2
-master-3
+{% for host in masters %}
+{{ host }}
+{% endfor %}
 
 # host group for nodes, includes region info
 [nodes]
-master-1 openshift_node_group_name='node-config-master'
-master-2 openshift_node_group_name='node-config-master'
-master-3 openshift_node_group_name='node-config-master'
-infra-1 openshift_node_group_name='node-config-infra'
-infra-2 openshift_node_group_name='node-config-infra'
-node-1 openshift_node_group_name='node-config-compute'
-node-2 openshift_node_group_name='node-config-compute'
+{% for host in masters %}
+{{ host }} openshift_node_group_name='node-config-master'
+{% endfor %}
 
+{% for host in infra_nodes %}
+{{ host }} openshift_node_group_name='node-config-infra'
+{% endfor %}
+
+{% for host in app_nodes %}
+{{ host }} openshift_node_group_name='node-config-compute'
+{% endfor %}
