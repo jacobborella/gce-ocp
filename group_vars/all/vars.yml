@@ -18,6 +18,7 @@ bastion_tag: "gce-ocp-test-bastion"
 master_tag: "gce-ocp-test-master"
 infra_tag: "gce-ocp-test-master"
 node_tag: "gce-ocp-test-node"
+machine_image: my-rhel-image
 cluster_network_name: "gce-ocp-test-net"
 cluster_subnetwork_name: "gce-ocp-test-subnet"
 cluster_network_cidr: "10.240.0.0/24"

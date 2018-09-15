@@ -137,7 +137,7 @@
         instance_names: bastion-host
         zone: "{{ zone }}"
         machine_type: n1-standard-1
-        image: my-rhel-image
+        image: "{{ machine_image }}"
         state: present
         tags:
           - "{{ bastion_tag }}"
@@ -153,7 +153,7 @@
         size_gb: 10
         zone: "{{ zone }}"
         project: "{{ project_id }}"
-        source_image: https://www.googleapis.com/compute/v1/projects/gce-ocp-test/global/images/my-rhel-image
+        source_image: "https://www.googleapis.com/compute/v1/projects/{{ project_id }}/global/images/{{ machine_image }}"
         auth_kind: serviceaccount
         service_account_file: "{{ credentials_file }}"
         scopes:
@@ -185,7 +185,7 @@
         instance_names: "{{item}}"
         zone: "{{ zone }}"
         machine_type: n1-standard-8
-        image: my-rhel-image
+        image: "{{ machine_image }}"
         state: present
         tags:
           - "{{ master_tag }}"
@@ -207,7 +207,7 @@
         instance_names: "{{item}}"
         zone: "{{ zone }}"
         machine_type: n1-standard-8
-        image: my-rhel-image
+        image: "{{ machine_image }}"
         state: present
         tags:
           - "{{ infra_tag }}"
@@ -229,7 +229,7 @@
         instance_names: "{{item}}"
         zone: "{{ zone }}"
         machine_type: n1-standard-8
-        image: my-rhel-image
+        image: "{{ machine_image }}"
         state: present
         tags:
           - "{{ node_tag }}"
@@ -265,13 +265,13 @@
         members: "{{ app_nodes_with_zone }}"
         external_ip: "{{ project_id }}-app-lb-ip"
         port_range: 80-443
-#        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
-#        httphealthcheck_port: 8443
-#        httphealthcheck_path: "/healthz"
-#        httphealthcheck_interval: 10
-#        httphealthcheck_timeout: 10
-#        httphealthcheck_healthy_count: 3
-#        httphealthcheck_unhealthy_count: 3
+        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
+        httphealthcheck_port: 443
+        httphealthcheck_path: "/healthz"
+        httphealthcheck_interval: 10
+        httphealthcheck_timeout: 10
+        httphealthcheck_healthy_count: 3
+        httphealthcheck_unhealthy_count: 3
         state: present
     - name: create list with master nodes + zone
       set_fact:
@@ -341,16 +341,17 @@
 - hosts: master_ips:infra_ips:app_node_ips
   become: no
   tasks:
+    - ping:
     - name: Wait for SSH for instances
       wait_for_connection:
     - authorized_key:
         user: "{{ remote_linux_user }}"
         state: present
         key: "{{ lookup('file', '{{ public_key_location }}') }}"
-#- hosts: master_ips:infra_ips:app_node_ips
-#  become: true
-#  roles:
-#    - node-prereq
+- hosts: master_ips:infra_ips:app_node_ips
+  become: true
+  roles:
+    - node-prereq
 - hosts: localhost
   tasks:
     - gce_net:
