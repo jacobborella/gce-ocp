@@ -9,6 +9,10 @@ infra_nodes:
 app_nodes:
   - node-1
   - node-2
+cns_nodes:
+  - cns-1
+  - cns-2
+  - cns-3
 service_account_email: "admin-937@gce-ocp-test.iam.gserviceaccount.com"
 credentials_file: "/Users/jacobborella/workspace/gce-ocp-demo/shell/gce-ocp-test-e47ea5fac0d2.json"
 project_id: "gce-ocp-test"
@@ -16,9 +20,10 @@ region: "europe-west3"
 zone: "europe-west3-b"
 bastion_tag: "gce-ocp-test-bastion"
 master_tag: "gce-ocp-test-master"
-infra_tag: "gce-ocp-test-master"
+infra_tag: "gce-ocp-test-infra"
 node_tag: "gce-ocp-test-node"
-machine_image: my-rhel-image
+cns_tag: "gce-ocp-test-cns"
+machine_image: rhel-image-v1
 cluster_network_name: "gce-ocp-test-net"
 cluster_subnetwork_name: "gce-ocp-test-subnet"
 cluster_network_cidr: "10.240.0.0/24"

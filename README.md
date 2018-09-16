@@ -13,3 +13,4 @@ ansible-playbook site.yml
 ```
 
 Note: Not production ready, not even finalized ATM
+* If you enable logging, you'll need big infra machines. Logging alone require 16+ G of memory

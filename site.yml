@@ -131,6 +131,26 @@
         target_tags: "{{ node_tag }}"
         src_tags: "{{ infra_tag }}"
         state: present
+    - name: Allow tcp traffic on port 2222 from cns to cns
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: cns-to-cns
+        allowed: tcp:2222
+        target_tags: "{{ cns_tag }}"
+        src_tags: "{{ cns_tag }}"
+        state: present
+    - name: Allow tcp traffic from node to cns
+      gce_net:
+        project_id: "{{ project_id }}"
+        credentials_file: "{{ credentials_file }}"
+        name: "{{ cluster_network_name }}"
+        fwname: node-to-cns
+        allowed: tcp:111,3260,24007-24010,49152-49664;udp:111
+        target_tags: "{{ cns_tag }}"
+        src_tags: "{{ node_tag }}"
+        state: present
 
     - name: Create bastion host
       gce:
@@ -163,6 +183,7 @@
         - "{{ masters }}"
         - "{{ infra_nodes }}"
         - "{{ app_nodes }}"
+        - "{{ cns_nodes }}"
 
     - name: create docker disks
       gcp_compute_disk:
@@ -179,6 +200,21 @@
         - "{{ masters }}"
         - "{{ infra_nodes }}"
         - "{{ app_nodes }}"
+        - "{{ cns_nodes }}"
+
+    - name: create cns disks
+      gcp_compute_disk:
+        name: "{{ item }}-cns-disk"
+        size_gb: 100
+        zone: "{{ zone }}"
+        project: "{{ project_id }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ credentials_file }}"
+        scopes:
+          - https://www.googleapis.com/auth/compute
+        state: present
+      with_items:
+        - "{{ cns_nodes }}"
 
     - name: create master instances
       gce:
@@ -199,6 +235,15 @@
         project_id: "{{ project_id }}"
         network: "{{ cluster_network_name }}"
         subnetwork: "{{ cluster_subnetwork_name }}"
+        service_account_permissions:
+          - https://www.googleapis.com/auth/cloud-platform
+          - https://www.googleapis.com/auth/cloud.useraccounts.readonly
+          - https://www.googleapis.com/auth/compute
+          - https://www.googleapis.com/auth/devstorage.read_write
+          - https://www.googleapis.com/auth/logging.write
+          - https://www.googleapis.com/auth/monitoring.write
+          - https://www.googleapis.com/auth/service.management.readonly
+          - https://www.googleapis.com/auth/servicecontrol
       with_items: "{{ masters }}"
       register: gce_master
 
@@ -221,6 +266,14 @@
         project_id: "{{ project_id }}"
         network: "{{ cluster_network_name }}"
         subnetwork: "{{ cluster_subnetwork_name }}"
+        service_account_permissions:
+          - https://www.googleapis.com/auth/cloud.useraccounts.readonly
+          - https://www.googleapis.com/auth/compute
+          - https://www.googleapis.com/auth/devstorage.read_write
+          - https://www.googleapis.com/auth/logging.write
+          - https://www.googleapis.com/auth/monitoring.write
+          - https://www.googleapis.com/auth/service.management.readonly
+          - https://www.googleapis.com/auth/servicecontrol
       with_items: "{{ infra_nodes }}"
       register: gce_infra
 
@@ -242,8 +295,49 @@
         project_id: "{{ project_id }}"
         network: "{{ cluster_network_name }}"
         subnetwork: "{{ cluster_subnetwork_name }}"
+        service_account_permissions:
+          - https://www.googleapis.com/auth/cloud.useraccounts.readonly
+          - https://www.googleapis.com/auth/compute
+          - https://www.googleapis.com/auth/devstorage.read_only
+          - https://www.googleapis.com/auth/logging.write
+          - https://www.googleapis.com/auth/monitoring.write
+          - https://www.googleapis.com/auth/service.management.readonly
+          - https://www.googleapis.com/auth/servicecontrol
       with_items: "{{ app_nodes }}"
       register: gce_app_node
+
+    - name: create cns instances
+      gce:
+        instance_names: "{{item}}"
+        zone: "{{ zone }}"
+        machine_type: n1-standard-4
+        image: "{{ machine_image }}"
+        state: present
+        tags:
+          - "{{ cns_tag }}"
+          - "{{ node_tag }}"
+        disks:
+          - name: "{{ item }}-boot-disk"
+            mode: READ_WRITE
+          - name: "{{ item }}-docker-disk"
+            mode: READ_WRITE
+          - name: "{{ item }}-cns-disk"
+            mode: READ_WRITE
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        network: "{{ cluster_network_name }}"
+        subnetwork: "{{ cluster_subnetwork_name }}"
+        service_account_permissions:
+          - https://www.googleapis.com/auth/cloud.useraccounts.readonly
+          - https://www.googleapis.com/auth/compute
+          - https://www.googleapis.com/auth/devstorage.read_write
+          - https://www.googleapis.com/auth/logging.write
+          - https://www.googleapis.com/auth/monitoring.write
+          - https://www.googleapis.com/auth/service.management.readonly
+          - https://www.googleapis.com/auth/servicecontrol
+      with_items: "{{ cns_nodes }}"
+      register: gce_cns_node
+
     - name: Create IP for app LB
       gce_eip:
         credentials_file: "{{ credentials_file }}"
@@ -265,13 +359,13 @@
         members: "{{ app_nodes_with_zone }}"
         external_ip: "{{ project_id }}-app-lb-ip"
         port_range: 80-443
-        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
-        httphealthcheck_port: 443
-        httphealthcheck_path: "/healthz"
-        httphealthcheck_interval: 10
-        httphealthcheck_timeout: 10
-        httphealthcheck_healthy_count: 3
-        httphealthcheck_unhealthy_count: 3
+#        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
+#        httphealthcheck_port: 443
+#        httphealthcheck_path: "/healthz"
+#        httphealthcheck_interval: 10
+#        httphealthcheck_timeout: 10
+#        httphealthcheck_healthy_count: 3
+#        httphealthcheck_unhealthy_count: 3
         state: present
     - name: create list with master nodes + zone
       set_fact:
@@ -321,6 +415,12 @@
         groupname: app_node_ips
       loop: "{{ gce_app_node.results }}"
 
+    - name: Save host data (cns node)
+      add_host:
+        hostname: "{{ item.instance_data[0].public_ip }}"
+        groupname: cns_ips
+      loop: "{{ gce_cns_node.results }}"
+
     - name: Save host data (bastion)
       add_host:
         hostname: "{{ item.public_ip }}"
@@ -328,40 +428,40 @@
       with_items: "{{ gce_bastion.instance_data }}"
 
 # This is a mess clean up, look at reference guide ssh -A (couldn't get it to work, try again
-- hosts: localhost 
-  tasks:
-    - gce_net:
-        project_id: "{{ project_id }}"
-        credentials_file: "{{ credentials_file }}"
-        name: "{{ cluster_network_name }}"
-        fwname: ext-to-node-ssh-22
-        allowed: tcp:22
-        target_tags: "{{ node_tag }}"
-        state: present
-- hosts: master_ips:infra_ips:app_node_ips
-  become: no
-  tasks:
-    - ping:
-    - name: Wait for SSH for instances
-      wait_for_connection:
-    - authorized_key:
-        user: "{{ remote_linux_user }}"
-        state: present
-        key: "{{ lookup('file', '{{ public_key_location }}') }}"
-- hosts: master_ips:infra_ips:app_node_ips
-  become: true
-  roles:
-    - node-prereq
-- hosts: localhost
-  tasks:
-    - gce_net:
-        project_id: "{{ project_id }}"
-        credentials_file: "{{ credentials_file }}"
-        name: "{{ cluster_network_name }}"
-        fwname: ext-to-node-ssh-22
-        allowed: tcp:22
-        target_tags: "{{ node_tag }}"
-        state: absent
+#- hosts: localhost 
+#  tasks:
+#    - gce_net:
+#        project_id: "{{ project_id }}"
+#        credentials_file: "{{ credentials_file }}"
+#        name: "{{ cluster_network_name }}"
+#        fwname: ext-to-node-ssh-22
+#        allowed: tcp:22
+#        target_tags: "{{ node_tag }}"
+#        state: present
+#- hosts: master_ips:infra_ips:app_node_ips,cns_ips
+#  become: no
+#  tasks:
+#    - ping:
+#    - name: Wait for SSH for instances
+#      wait_for_connection:
+#    - authorized_key:
+#        user: "{{ remote_linux_user }}"
+#        state: present
+#        key: "{{ lookup('file', '{{ public_key_location }}') }}"
+#- hosts: master_ips:infra_ips:app_node_ips:cns_ips
+#  become: true
+#  roles:
+#    - node-prereq
+#- hosts: localhost
+#  tasks:
+#    - gce_net:
+#        project_id: "{{ project_id }}"
+#        credentials_file: "{{ credentials_file }}"
+#        name: "{{ cluster_network_name }}"
+#        fwname: ext-to-node-ssh-22
+#        allowed: tcp:22
+#        target_tags: "{{ node_tag }}"
+#        state: absent
 - hosts: bastion_ips
   become: no
   tasks:
@@ -373,7 +473,7 @@
         group: "{{ remote_linux_user }}"
         mode: 0600
     - name: Add host name key to known hosts
-      shell: ssh-keyscan -H {{' '.join(masters) + ' ' + ' '.join(infra_nodes) + ' ' + ' '.join(app_nodes) }} >> .ssh/known_hosts
+      shell: ssh-keyscan -H {{' '.join(masters) + ' ' + ' '.join(infra_nodes) + ' ' + ' '.join(app_nodes) + ' ' + ' '.join(cns_nodes) }} >> .ssh/known_hosts
         creates=.ssh/known_hosts
         chdir="/home/{{remote_linux_user}}"
 # End of mess
