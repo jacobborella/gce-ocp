@@ -1,29 +1,4 @@
 ---
-#- name: Subscribe the machine
-#  redhat_subscription:
-#    state: present
-#    username: "{{ rh_username }}"
-#    password: "{{ rh_password }}"
-#    pool_ids: "{{ rh_poolid }}"
-#- name: Install yum utils, needed for later steps
-#  yum:
-#    name: yum-utils
-#- name: Disable all RHSM repositories
-#  shell: subscription-manager repos --disable="*"
-#- name: Disable remaining repositories (epel*)
-#  shell: yum-config-manager --disable epel*
-#- name: Disable remaining repositories (rhui)
-#  shell: yum-config-manager --disable rhui*
-#- name: Enable needed repos
-#  shell: subscription-manager repos --enable="rhel-7-server-rpms" --enable="rhel-7-server-extras-rpms" --enable="rhel-7-server-ose-3.10-rpms" --enable="rhel-7-server-ansible-2.4-rpms"
-#- name: Install required packages
-#  yum:
-#    name: openshift-ansible
-#    state: latest
-#- name: upgrade all packages
-#  yum:
-#    name: '*'
-#    state: latest
 - name: add the inventory file
   template:
     src: roles/bastion-prereq/templates/hosts.j2
@@ -32,4 +7,13 @@
   template:
     src: roles/bastion-prereq/templates/ansible.cfg.j2
     dest: /etc/ansible/ansible.cfg
+- name: add docker-setup file for post processing
+  copy:
+    src: roles/bastion-prereq/files/docker-setup.yml
+    dest: ~
+- name: add install file to bastion for easy installation
+  copy:
+    src: roles/bastion-prereq/files/install.sh
+    dest: ~
+    mode: 0700
 

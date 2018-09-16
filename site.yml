@@ -427,41 +427,6 @@
         groupname: bastion_ips
       with_items: "{{ gce_bastion.instance_data }}"
 
-# This is a mess clean up, look at reference guide ssh -A (couldn't get it to work, try again
-#- hosts: localhost 
-#  tasks:
-#    - gce_net:
-#        project_id: "{{ project_id }}"
-#        credentials_file: "{{ credentials_file }}"
-#        name: "{{ cluster_network_name }}"
-#        fwname: ext-to-node-ssh-22
-#        allowed: tcp:22
-#        target_tags: "{{ node_tag }}"
-#        state: present
-#- hosts: master_ips:infra_ips:app_node_ips,cns_ips
-#  become: no
-#  tasks:
-#    - ping:
-#    - name: Wait for SSH for instances
-#      wait_for_connection:
-#    - authorized_key:
-#        user: "{{ remote_linux_user }}"
-#        state: present
-#        key: "{{ lookup('file', '{{ public_key_location }}') }}"
-#- hosts: master_ips:infra_ips:app_node_ips:cns_ips
-#  become: true
-#  roles:
-#    - node-prereq
-#- hosts: localhost
-#  tasks:
-#    - gce_net:
-#        project_id: "{{ project_id }}"
-#        credentials_file: "{{ credentials_file }}"
-#        name: "{{ cluster_network_name }}"
-#        fwname: ext-to-node-ssh-22
-#        allowed: tcp:22
-#        target_tags: "{{ node_tag }}"
-#        state: absent
 - hosts: bastion_ips
   become: no
   tasks:
@@ -476,7 +441,6 @@
       shell: ssh-keyscan -H {{' '.join(masters) + ' ' + ' '.join(infra_nodes) + ' ' + ' '.join(app_nodes) + ' ' + ' '.join(cns_nodes) }} >> .ssh/known_hosts
         creates=.ssh/known_hosts
         chdir="/home/{{remote_linux_user}}"
-# End of mess
 
 - hosts: bastion_ips
   become: yes

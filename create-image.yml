@@ -1,0 +1,27 @@
+- hosts: master_ips:infra_ips:app_node_ips:cns_ips
+  become: true
+  roles:
+    - node-prereq
+    - name: Create temporary image
+      gce:
+        instance_names: temp-image
+        zone: "{{ zone }}"
+        machine_type: n1-standard-1
+        image: "{{ machine_image }}"
+        state: present
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+      register: gce_bastion
+    - name: Save host data (bastion)
+      add_host:
+        hostname: "{{ item.public_ip }}"
+        groupname: bastion_ips
+      with_items: "{{ gce_bastion.instance_data }}"
+
+# upload public key
+    - name: Wait for SSH for instances
+      wait_for_connection:
+    - authorized_key:
+        user: "{{ remote_linux_user }}"
+        state: present
+        key: "{{ lookup('file', '{{ public_key_location }}') }}"

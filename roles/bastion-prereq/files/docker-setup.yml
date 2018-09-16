@@ -1,0 +1,18 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: Setup docker storage
+      block:
+        - copy:
+            dest: "/etc/sysconfig/docker-storage-setup"
+            content: |
+              DEVS=/dev/sdb
+              VG=docker-vg
+        - command: docker-storage-setup
+    - name: enable docker and ensure it is not masked
+      systemd:
+        name: docker
+        enabled: yes
+        masked: no
+    - name: Make sure docker is running
+      systemd: state=started name=docker

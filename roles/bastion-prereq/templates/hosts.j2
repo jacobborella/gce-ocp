@@ -107,6 +107,6 @@ openshift_service_catalog_image_version=v3.10
 
 [glusterfs]
 {% for host in cns_nodes %}
-{{ host }} glusterfs_devices='[ "/dev/sdc1" ]'
+{{ host }} glusterfs_devices='[ "/dev/sdc" ]'
 {% endfor %}
 
