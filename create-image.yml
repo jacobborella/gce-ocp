@@ -38,7 +38,6 @@
       gce:
         name: "{{ project_id }}-temp-image"
         zone: "{{ zone }}"
-        image: "{{ machine_image }}"
         state: stopped
         credentials_file: "{{ credentials_file }}"
         project_id: "{{ project_id }}"
@@ -56,7 +55,6 @@
       gce:
         name: "{{ project_id }}-temp-image"
         zone: "{{ zone }}"
-        image: "{{ machine_image }}"
         state: absent
         service_account_email: "{{ service_account_email }}"
         project_id: "{{ project_id }}"

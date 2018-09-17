@@ -23,7 +23,7 @@ master_tag: "{{ project_id }}-master"
 infra_tag: "{{ project_id }}-infra"
 node_tag: "{{ project_id }}-node"
 cns_tag: "{{ project_id }}-cns"
-machine_image: rhel-image-v1
+machine_image: {{ project_id }}-rhel-image
 cluster_network_name: "{{ project_id }}-net"
 cluster_subnetwork_name: "{{ project_id }}-subnet"
 cluster_network_cidr: "10.240.0.0/24"
