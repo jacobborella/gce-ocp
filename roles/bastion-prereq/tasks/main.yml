@@ -11,9 +11,12 @@
   copy:
     src: roles/bastion-prereq/files/docker-setup.yml
     dest: "/home/{{ remote_linux_user }}"
+    owner: "{{ remote_linux_user }}"
+    group: "{{ remote_linux_user }}"
 - name: add install file to bastion for easy installation
   copy:
     src: roles/bastion-prereq/files/install.sh
     dest: "/home/{{ remote_linux_user }}"
     mode: u=rwx
-
+    owner: "{{ remote_linux_user }}"
+    group: "{{ remote_linux_user }}"
