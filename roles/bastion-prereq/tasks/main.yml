@@ -10,10 +10,10 @@
 - name: add docker-setup file for post processing
   copy:
     src: roles/bastion-prereq/files/docker-setup.yml
-    dest: ~
+    dest: "/home/{{ remote_linux_user }}"
 - name: add install file to bastion for easy installation
   copy:
     src: roles/bastion-prereq/files/install.sh
-    dest: ~
-    mode: 0700
+    dest: "/home/{{ remote_linux_user }}"
+    mode: u=rwx
 
