@@ -1,27 +1,63 @@
-- hosts: master_ips:infra_ips:app_node_ips:cns_ips
-  become: true
-  roles:
-    - node-prereq
+---
+- name: Create vm to configure
+  hosts: localhost
+  tasks:
     - name: Create temporary image
       gce:
-        instance_names: temp-image
+        instance_names: "{{ project_id }}-temp-image"
         zone: "{{ zone }}"
         machine_type: n1-standard-1
-        image: "{{ machine_image }}"
+        image: rhel-7-v20180911
         state: present
+        service_account_email: "{{ service_account_email }}"
         credentials_file: "{{ credentials_file }}"
         project_id: "{{ project_id }}"
-      register: gce_bastion
-    - name: Save host data (bastion)
+      register: gce_temp_image
+    - name: Save host data (temporary machine)
       add_host:
         hostname: "{{ item.public_ip }}"
-        groupname: bastion_ips
-      with_items: "{{ gce_bastion.instance_data }}"
+        groupname: temp_img_ips
+      with_items: "{{ gce_temp_image.instance_data }}"
 
-# upload public key
+- hosts: temp_img_ips
+  become: true
+  tasks:
     - name: Wait for SSH for instances
       wait_for_connection:
     - authorized_key:
         user: "{{ remote_linux_user }}"
         state: present
         key: "{{ lookup('file', '{{ public_key_location }}') }}"
+    - name: Setup the machine with all prereqs
+      include_role:
+        name: node-prereq
+
+- hosts: localhost
+  tasks:
+    - name: Stop machine to create image
+      gce:
+        name: "{{ project_id }}-temp-image"
+        zone: "{{ zone }}"
+        image: "{{ machine_image }}"
+        state: stopped
+        credentials_file: "{{ credentials_file }}"
+        project_id: "{{ project_id }}"
+        service_account_email: "{{ service_account_email }}"
+    - name: Create a new image from the vm disk
+      gce_img:
+        name: "{{ project_id }}-rhel-image"
+        source: "{{ project_id }}-temp-image"
+        zone: "{{ zone }}"
+        project_id: "{{ project_id }}"
+        state: present
+        service_account_email: "{{ service_account_email }}"
+        pem_file: "{{ credentials_file }}"
+    - name: Delete the vm after the image is created
+      gce:
+        name: "{{ project_id }}-temp-image"
+        zone: "{{ zone }}"
+        image: "{{ machine_image }}"
+        state: absent
+        service_account_email: "{{ service_account_email }}"
+        project_id: "{{ project_id }}"
+        pem_file: "{{ credentials_file }}"

@@ -1,4 +1,7 @@
 ---
+- name: Install the subscription-manager
+  yum:
+    name: subscription-manager
 - name: Subscribe the machine
   redhat_subscription:
     state: present
@@ -27,3 +30,6 @@
 - name: Install docker
   yum:
     name: docker-1.13.1
+- name: Unsubscribe the machine
+  redhat_subscription:
+    state: absent
