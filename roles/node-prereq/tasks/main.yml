@@ -30,6 +30,3 @@
 - name: Install docker
   yum:
     name: docker-1.13.1
-- name: Unsubscribe the machine
-  redhat_subscription:
-    state: absent
