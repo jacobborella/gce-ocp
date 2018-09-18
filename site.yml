@@ -367,35 +367,47 @@
 #        httphealthcheck_healthy_count: 3
 #        httphealthcheck_unhealthy_count: 3
         state: present
-    - name: create list with master nodes + zone
-      set_fact:
-        master_nodes_with_zone: "{{ masters | map('regex_replace', '^(.*)$','{{ zone }}/\\1') | list  }}"
-    - name: Create IP for master LB
-      gce_eip:
-        credentials_file: "{{ credentials_file }}"
-        project_id: "{{ project_id }}"
-        service_account_email: "{{ service_account_email }}"
-        name: "{{ project_id }}-master-lb-ip"
-        region: "{{ region }}"
-        state: present
-    - name: Create master LB
-      gce_lb:
-        credentials_file: "{{ credentials_file }}"
-        project_id: "{{ project_id }}"
-        service_account_email: "{{ service_account_email }}"
-        name: "{{ project_id }}-master-lb"
-        region: "{{ region }}"
-        members: "{{ master_nodes_with_zone }}"
-        external_ip: "{{ project_id }}-master-lb-ip"
-        port_range: 443
-#        httphealthcheck_name: "{{ project_id }}-master-lb-healthcheck"
-#        httphealthcheck_port: 8443
-#        httphealthcheck_path: "/healthz"
-#        httphealthcheck_interval: 10
-#        httphealthcheck_timeout: 10
-#        httphealthcheck_healthy_count: 3
-#        httphealthcheck_unhealthy_count: 3
-        state: present
+#Create master LB
+    - name: create an ip-address for the master LB
+      gcp_compute_address:
+          name: "{{ project_id }}-master-lb-ip"
+          region: "{{ region }}"
+          project: "{{ project_id }}"
+          auth_kind: serviceaccount
+          service_account_file: "{{ credentials_file }}"
+          scopes:
+            - https://www.googleapis.com/auth/compute
+          state: present
+      register: lb_ip_address
+    - name: create a target pool
+      gcp_compute_target_pool:
+          name: "{{ project_id }}-master-tp"
+          region: "{{ region }}"
+          project: "{{ project_id }}"
+          auth_kind: serviceaccount
+          service_account_file: "{{ credentials_file }}"
+          session_affinity: CLIENT_IP
+          scopes:
+            - https://www.googleapis.com/auth/compute
+          state: present
+      register: targetpool
+    - name: Add instances to target pool
+      shell: "gcloud compute target-pools add-instances gce-ocp-test-master-tp --instances={{ item }} --instances-zone={{ zone }}"
+      with_items: "{{ masters }}"
+    - name: create a forwarding rule
+      gcp_compute_forwarding_rule:
+          name: "{{ project_id }}-master-fr"
+          region: "{{ region }}"
+          target: "{{ targetpool }}"
+          ip_protocol: 'TCP'
+          port_range: '443-443'
+          ip_address: "{{ lb_ip_address.address }}"
+          project: "{{ project_id }}"
+          auth_kind: serviceaccount
+          service_account_file: "{{ credentials_file }}"
+          scopes:
+            - https://www.googleapis.com/auth/compute
+          state: present
 
     - name: Save host data (master)
       add_host:
