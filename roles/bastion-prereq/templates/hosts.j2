@@ -3,7 +3,6 @@
 masters
 nodes
 etcd
-glusterfs
 
 # Set variables common for all OSEv3 hosts
 [OSEv3:vars]
@@ -41,12 +40,6 @@ openshift_master_identity_providers=[{'name': 'allow_all', 'login': 'true', 'cha
 oreg_url=registry.access.redhat.com/openshift3/ose-${component}:${version}
 openshift_examples_modify_imagestreams=true
 
-#config for glusterfs
-openshift_storage_glusterfs_image=registry.access.redhat.com/rhgs3/rhgs-server-rhel7
-openshift_storage_glusterfs_block_image=registry.access.redhat.com/rhgs3/rhgs-gluster-block-prov-rhel7
-openshift_storage_glusterfs_s3_image=registry.access.redhat.com/rhgs3/rhgs-s3-server-rhel7
-openshift_storage_glusterfs_heketi_image=registry.access.redhat.com/rhgs3/rhgs-volmanager-rhel7
-
 # Service catalog
 openshift_hosted_etcd_storage_kind=dynamic
 openshift_hosted_etcd_storage_volume_name=etcd-vol
@@ -65,7 +58,7 @@ openshift_metrics_heapster_nodeselector={"node-role.kubernetes.io/infra":"true"}
 # Aggregated logging
 openshift_logging_install_logging=true
 openshift_logging_es_pvc_dynamic=true
-openshift_logging_es_pvc_size=50Gi
+openshift_logging_es_pvc_size=20Gi
 openshift_logging_es_cluster_size=3
 openshift_logging_es_nodeselector={"node-role.kubernetes.io/infra":"true"}
 openshift_logging_kibana_nodeselector={"node-role.kubernetes.io/infra":"true"}
@@ -99,14 +92,5 @@ openshift_service_catalog_image_version=v3.10
 
 {% for host in app_nodes %}
 {{ host }} openshift_node_group_name='node-config-compute'
-{% endfor %}
-
-{% for host in cns_nodes %}
-{{ host }} openshift_node_group_name='node-config-compute'
-{% endfor %}
-
-[glusterfs]
-{% for host in cns_nodes %}
-{{ host }} glusterfs_devices='[ "/dev/sdc" ]'
 {% endfor %}
 

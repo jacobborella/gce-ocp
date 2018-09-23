@@ -9,10 +9,6 @@ infra_nodes:
 app_nodes:
   - node-1
   - node-2
-cns_nodes:
-  - cns-1
-  - cns-2
-  - cns-3
 service_account_email: "admin-937@gce-ocp-test.iam.gserviceaccount.com"
 credentials_file: "/Users/jacobborella/workspace/gce-ocp-demo/shell/gce-ocp-test-e47ea5fac0d2.json"
 project_id: "gce-ocp-test"
